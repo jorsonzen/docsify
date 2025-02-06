@@ -1,15 +1,14 @@
-/* global jestPlaywright page */
-import mock, { proxy } from 'xhr-mock';
-import { waitForSelector } from './wait-for';
+/* globals page */
+import _mock, { proxy } from 'xhr-mock';
 
-const axios = require('axios');
-const prettier = require('prettier');
-const stripIndent = require('common-tags/lib/stripIndent');
+import axios from 'axios';
+import prettier from 'prettier';
+import { stripIndent } from 'common-tags';
+import { waitForSelector } from './wait-for.js';
 
-const docsifyPATH = '../../lib/docsify.js'; // JSDOM
-const docsifyURL = '/lib/docsify.js'; // Playwright
-const isJSDOM = 'window' in global;
-const isPlaywright = 'page' in global;
+const mock = _mock.default;
+const docsifyPATH = '../../dist/docsify.js'; // JSDOM
+const docsifyURL = '/dist/docsify.js'; // Playwright
 
 /**
  * Jest / Playwright helper for creating custom docsify test sites
@@ -26,19 +25,21 @@ const isPlaywright = 'page' in global;
  * @param {String} [options.script] JS to inject via <script> tag
  * @param {String|String[]} [options.scriptURLs] External JS to inject via <script src="..."> tag(s)
  * @param {String} [options.style] CSS to inject via <style> tag
- * @param {String|String[]} [options.styleURLs=['/lib/themes/vue.css']] External CSS to inject via <link rel="stylesheet"> tag(s)
+ * @param {String|String[]} [options.styleURLs=['/dist/themes/core.css']] External CSS to inject via <link rel="stylesheet"> tag(s)
  * @param {String} [options.testURL] URL to set as window.location.href
- * @param {String} [options.waitForSelector='#main'] Element to wait for before returning promsie
- * @param {String} [options._debug] initiate debugger after site is created
+ * @param {String} [options.waitForSelector='#main'] Element to wait for before returning promise
  * @param {Boolean|Object|String} [options._logHTML] Logs HTML to console after initialization. Accepts CSS selector.
  * @param {Boolean} [options._logHTML.format=true] Formats HTML output
  * @param {String} [options._logHTML.selector='html'] CSS selector(s) to match and log HTML for
  * @returns {Promise}
  */
 async function docsifyInit(options = {}) {
+  const isJSDOM = 'window' in global;
+  const isPlaywright = 'page' in global;
+
   const defaults = {
     config: {
-      basePath: TEST_HOST,
+      basePath: process.env.TEST_HOST,
       el: '#app',
     },
     html: `
@@ -63,8 +64,8 @@ async function docsifyInit(options = {}) {
     scriptURLs: [],
     style: '',
     styleURLs: [],
-    testURL: `${TEST_HOST}/docsify-init.html`,
-    waitForSelector: '#main > *',
+    testURL: `${process.env.TEST_HOST}/docsify-init.html`,
+    waitForSelector: '#main > *:first-child',
   };
   const settings = {
     ...defaults,
@@ -80,13 +81,16 @@ async function docsifyInit(options = {}) {
 
       const updateBasePath = config => {
         if (config.basePath) {
-          config.basePath = new URL(config.basePath, TEST_HOST).href;
+          config.basePath = new URL(
+            config.basePath,
+            process.env.TEST_HOST,
+          ).href;
         }
       };
 
       // Config as function
       if (typeof options.config === 'function') {
-        return function(vm) {
+        return function (vm) {
           const config = { ...sharedConfig, ...options.config(vm) };
 
           updateBasePath(config);
@@ -110,16 +114,16 @@ async function docsifyInit(options = {}) {
           ...options.markdown,
         })
           .filter(([key, markdown]) => key && markdown)
-          .map(([key, markdown]) => [key, stripIndent`${markdown}`])
+          .map(([key, markdown]) => [key, stripIndent`${markdown}`]),
       );
     },
     get routes() {
       const helperRoutes = {
         [settings.testURL]: stripIndent`${settings.html}`,
-        ['README.md']: settings.markdown.homepage,
-        ['_coverpage.md']: settings.markdown.coverpage,
-        ['_navbar.md']: settings.markdown.navbar,
-        ['_sidebar.md']: settings.markdown.sidebar,
+        'README.md': settings.markdown.homepage,
+        '_coverpage.md': settings.markdown.coverpage,
+        '_navbar.md': settings.markdown.navbar,
+        '_sidebar.md': settings.markdown.sidebar,
       };
 
       const finalRoutes = Object.fromEntries(
@@ -131,10 +135,11 @@ async function docsifyInit(options = {}) {
           .filter(([url, responseText]) => url && responseText)
           .map(([url, responseText]) => [
             // Convert relative to absolute URL
-            new URL(url, settings.config.basePath || TEST_HOST).href,
+            new URL(url, settings.config.basePath || process.env.TEST_HOST)
+              .href,
             // Strip indentation from responseText
             stripIndent`${responseText}`,
-          ])
+          ]),
       );
 
       return finalRoutes;
@@ -143,11 +148,11 @@ async function docsifyInit(options = {}) {
     scriptURLs: []
       .concat(options.scriptURLs || '')
       .filter(url => url)
-      .map(url => new URL(url, TEST_HOST).href),
+      .map(url => new URL(url, process.env.TEST_HOST).href),
     styleURLs: []
       .concat(options.styleURLs || '')
       .filter(url => url)
-      .map(url => new URL(url, TEST_HOST).href),
+      .map(url => new URL(url, process.env.TEST_HOST).href),
   };
 
   // Routes
@@ -160,7 +165,7 @@ async function docsifyInit(options = {}) {
   };
   const reFileExtentionFromURL = new RegExp(
     '(?:.)(' + Object.keys(contentTypes).join('|') + ')(?:[?#].*)?$',
-    'i'
+    'i',
   );
 
   if (isJSDOM) {
@@ -214,16 +219,34 @@ async function docsifyInit(options = {}) {
   } else if (isPlaywright) {
     // Convert config functions to strings
     const configString = JSON.stringify(settings.config, (key, val) =>
-      typeof val === 'function' ? `__FN__${val.toString()}` : val
+      typeof val === 'function' ? `__FN__${val.toString()}` : val,
     );
 
     await page.evaluate(config => {
       // Restore config functions from strings
-      const configObj = JSON.parse(config, (key, val) =>
-        /^__FN__/.test(val)
-          ? new Function(`return ${val.split('__FN__')[1]}`)()
-          : val
-      );
+      const configObj = JSON.parse(config, (key, val) => {
+        if (/^__FN__/.test(val)) {
+          let source = val.split('__FN__')[1];
+
+          // f.e. `foo() {}` or `'bar!?'() {}` without the `function ` prefix
+          const isConcise =
+            !source.includes('function') && !source.includes('=>');
+
+          if (isConcise) {
+            source = `{ ${source} }`;
+          } else {
+            source = `{ _: ${source} }`;
+          }
+
+          return new Function(/* js */ `
+            const o = ${source}
+            const keys = Object.keys(o)
+            return o[keys[0]]
+          `)();
+        } else {
+          return val;
+        }
+      });
 
       window.$docsify = configObj;
     }, configString);
@@ -257,7 +280,7 @@ async function docsifyInit(options = {}) {
     const isDocsifyLoaded = 'Docsify' in window;
 
     if (!isDocsifyLoaded) {
-      require(docsifyPATH);
+      await import(docsifyPATH);
     }
   } else if (isPlaywright) {
     for (const url of settings.scriptURLs) {
@@ -280,13 +303,16 @@ async function docsifyInit(options = {}) {
       styleElm.textContent = stripIndent`${settings.style}`;
       headElm.appendChild(styleElm);
     } else if (isPlaywright) {
-      await page.evaluate(data => {
-        const headElm = document.querySelector('head');
-        const styleElm = document.createElement('style');
+      await page.evaluate(
+        data => {
+          const headElm = document.querySelector('head');
+          const styleElm = document.createElement('style');
 
-        styleElm.textContent = data;
-        headElm.appendChild(styleElm);
-      }, stripIndent`${settings.style}`);
+          styleElm.textContent = data;
+          headElm.appendChild(styleElm);
+        },
+        stripIndent`${settings.style}`,
+      );
     }
   }
 
@@ -306,8 +332,9 @@ async function docsifyInit(options = {}) {
   if (isJSDOM) {
     await waitForSelector(settings.waitForSelector);
   } else if (isPlaywright) {
-    await page.waitForSelector(settings.waitForSelector);
-    await page.waitForLoadState('networkidle');
+    // await page.waitForSelector(settings.waitForSelector);
+    await page.locator(settings.waitForSelector).waitFor();
+    await page.waitForLoadState('load');
   }
 
   // Log HTML to console
@@ -322,11 +349,11 @@ async function docsifyInit(options = {}) {
     if (selector) {
       if (isJSDOM) {
         htmlArr = [...document.querySelectorAll(selector)].map(
-          elm => elm.outerHTML
+          elm => elm.outerHTML,
         );
       } else {
-        htmlArr = await page.$$eval(selector, elms =>
-          elms.map(e => e.outerHTML)
+        htmlArr = await page.evaluateAll(selector, elms =>
+          elms.map(e => e.outerHTML),
         );
       }
     } else {
@@ -341,26 +368,14 @@ async function docsifyInit(options = {}) {
           html = prettier.format(html, { parser: 'html' });
         }
 
-        // eslint-disable-next-line no-console
         console.log(html);
       });
     } else {
-      // eslint-disable-next-line no-console
       console.warn(`docsify-init(): unable to match selector '${selector}'`);
-    }
-  }
-
-  // Debug
-  if (settings._debug) {
-    if (isJSDOM) {
-      // eslint-disable-next-line no-debugger
-      debugger;
-    } else if (isPlaywright) {
-      await jestPlaywright.debug();
     }
   }
 
   return Promise.resolve();
 }
 
-module.exports = docsifyInit;
+export default docsifyInit;

@@ -1,10 +1,16 @@
-*.log
-.DS_Store
+# Directories
+.husky/_
 .idea
-__diff_output__
-lib/
+.vercel
+_playwright-report
+_playwright-results
+dist
+lib
 node_modules
-themes/
 
-# exceptions
+# Files
+.DS_Store
+*.log
+
+# Exceptions
 !.gitkeep
