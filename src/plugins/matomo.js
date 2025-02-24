@@ -9,7 +9,7 @@ function init(options) {
   window._paq = window._paq || [];
   window._paq.push(['trackPageView']);
   window._paq.push(['enableLinkTracking']);
-  setTimeout(function() {
+  setTimeout(() => {
     appendScript(options);
     window._paq.push(['setTrackerUrl', options.host + '/matomo.php']);
     window._paq.push(['setSiteId', String(options.id)]);
@@ -26,7 +26,7 @@ function collect() {
   window._paq.push(['trackPageView']);
 }
 
-const install = function(hook) {
+const install = function (hook) {
   if (!$docsify.matomo) {
     // eslint-disable-next-line no-console
     console.error('[Docsify] matomo is required.');
@@ -36,4 +36,5 @@ const install = function(hook) {
   hook.beforeEach(collect);
 };
 
-$docsify.plugins = [].concat(install, $docsify.plugins);
+window.$docsify = window.$docsify || {};
+$docsify.plugins = [install, ...($docsify.plugins || [])];

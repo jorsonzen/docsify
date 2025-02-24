@@ -1,10 +1,10 @@
-import parser from './parser';
+import parser from './parser.js';
 
-const install = function(hook, vm) {
+const install = function (hook, vm) {
   // Used to remove front matter from embedded pages if installed.
   vm.config.frontMatter = {};
   vm.config.frontMatter.installed = true;
-  vm.config.frontMatter.parseMarkdown = function(content) {
+  vm.config.frontMatter.parseMarkdown = function (content) {
     const { body } = parser(content);
     return body;
   };
@@ -18,4 +18,5 @@ const install = function(hook, vm) {
   });
 };
 
-$docsify.plugins = [].concat(install, $docsify.plugins);
+window.$docsify = window.$docsify || {};
+$docsify.plugins = [install, ...($docsify.plugins || [])];

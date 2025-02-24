@@ -1,61 +1,37 @@
-const { TEST_HOST } = require('./test/config/server.js');
+import { testConfig } from './server.configs.js';
 
+const { hostname, port } = testConfig;
+const TEST_HOST = `http://${hostname}:${port}`;
 const sharedConfig = {
   errorOnDeprecated: true,
-  globals: {
-    TEST_HOST,
-  },
   globalSetup: './test/config/jest.setup.js',
   globalTeardown: './test/config/jest.teardown.js',
+  prettierPath: null, // Fix for Jest v29 and Prettier v3 (https://github.com/jestjs/jest/issues/14305)
   resetModules: true,
   restoreMocks: true,
+  setupFilesAfterEnv: ['<rootDir>/test/config/jest.setup-tests.js'],
+  testEnvironment: 'jest-environment-jsdom',
+  testEnvironmentOptions: {
+    url: `${TEST_HOST}/_blank.html`,
+  },
 };
 
-module.exports = {
-  // Adding globals to config root for easier importing into .eslint.js, but
-  // as of Jest 26.4.2 these globals need to be added to each project config
-  // as well.
-  globals: sharedConfig.globals,
+process.env.TEST_HOST = TEST_HOST;
+
+export default {
+  transform: {},
   projects: [
-    // Unit Tests (Jest)
+    // Unit Tests
     {
-      ...sharedConfig,
       displayName: 'unit',
-      setupFilesAfterEnv: ['<rootDir>/test/config/jest.setup-tests.js'],
+      ...sharedConfig,
       testMatch: ['<rootDir>/test/unit/*.test.js'],
-      testURL: `${TEST_HOST}/_blank.html`,
     },
-    // Integration Tests (Jest)
+    // Integration Tests
     {
-      ...sharedConfig,
       displayName: 'integration',
-      setupFilesAfterEnv: ['<rootDir>/test/config/jest.setup-tests.js'],
-      testMatch: ['<rootDir>/test/integration/*.test.js'],
-      testURL: `${TEST_HOST}/_blank.html`,
-    },
-    // E2E Tests (Jest + Playwright)
-    {
       ...sharedConfig,
-      displayName: 'e2e',
-      preset: 'jest-playwright-preset',
-      setupFilesAfterEnv: [
-        '<rootDir>/test/config/jest-playwright.setup-tests.js',
-      ],
-      testEnvironmentOptions: {
-        'jest-playwright': {
-          // prettier-ignore
-          browsers: [
-            'chromium',
-            'firefox',
-            'webkit',
-          ],
-          launchOptions: {
-            // headless: false,
-            // devtools: true,
-          },
-        },
-      },
-      testMatch: ['<rootDir>/test/e2e/*.test.js'],
+      testMatch: ['<rootDir>/test/integration/*.test.js'],
     },
   ],
 };

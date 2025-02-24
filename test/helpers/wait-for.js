@@ -9,9 +9,12 @@ const defaults = {
  * @param {Function} fn function to be evaluated until truthy
  * @param {*} arg optional argument to pass to `fn`
  * @param {Object} options optional parameters
- * @returns {Promise} promise which resolves to function result
+ * @param {number} options.delay delay between fn invocations
+ * @param {number} options.timeout timeout in milliseconds
+ * @returns {Promise} promise which resolves to the truthy fn return value or
+ * rejects to an error object or last non-truthy fn return value
  */
-export function waitForFunction(fn, arg, options = {}) {
+function waitForFunction(fn, arg, options = {}) {
   const settings = {
     ...defaults,
     ...options,
@@ -19,14 +22,15 @@ export function waitForFunction(fn, arg, options = {}) {
 
   return new Promise((resolve, reject) => {
     let timeElapsed = 0;
+    let lastError;
 
     const int = setInterval(() => {
       let result;
 
       try {
         result = fn(arg);
-      } catch (e) {
-        // Continue...
+      } catch (err) {
+        lastError = err;
       }
 
       if (result) {
@@ -37,11 +41,10 @@ export function waitForFunction(fn, arg, options = {}) {
       timeElapsed += settings.delay;
 
       if (timeElapsed >= settings.timeout) {
-        const msg = `waitForFunction did not return a truthy value (${
-          settings.timeout
-        } ms): ${fn.toString()}\n`;
-
-        reject(msg);
+        console.error(
+          `\nwaitForFunction did not return a truthy value within ${settings.timeout} ms.\n`,
+        );
+        reject(lastError || result);
       }
     }, settings.delay);
   });
@@ -52,9 +55,11 @@ export function waitForFunction(fn, arg, options = {}) {
  *
  * @param {String} cssSelector CSS selector to query for
  * @param {Object} options optional parameters
+ * @param {number} options.delay delay between checks
+ * @param {number} options.timeout timeout in milliseconds
  * @returns {Promise} promise which resolves to first matching element
  */
-export function waitForSelector(cssSelector, options = {}) {
+function waitForSelector(cssSelector, options = {}) {
   const settings = {
     ...defaults,
     ...options,
@@ -87,9 +92,11 @@ export function waitForSelector(cssSelector, options = {}) {
  * @param {String} cssSelector CSS selector to query for
  * @param {String} text text to match
  * @param {Object} options optional parameters
+ * @param {number} options.delay delay between checks
+ * @param {number} options.timeout timeout in milliseconds
  * @returns {Promise} promise which resolves to first matching element that contains specified text
  */
-export function waitForText(cssSelector, text, options = {}) {
+function waitForText(cssSelector, text, options = {}) {
   const settings = {
     ...defaults,
     ...options,
@@ -124,3 +131,5 @@ export function waitForText(cssSelector, text, options = {}) {
       });
   });
 }
+
+export { waitForFunction, waitForSelector, waitForText };
